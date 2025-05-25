@@ -93,7 +93,7 @@ A comprehensive PowerShell-based system reconnaissance and security assessment t
 
 1. Clone the repository:
 \`\`\`powershell
-git clone https://github.com/not2clever/enhanced-recon.git
+git clone https://github.com/not2clever/Penetration_Test_Tools.git
 \`\`\`
 
 2. Ensure you have the required PowerShell modules:
@@ -196,12 +196,6 @@ not2clever
 - ADCS vulnerability researchers
 - MITM security researchers
 
-## Support
-
-For issues, questions, or contributions, please:
-1. Check existing issues on GitHub
-2. Create a new issue with detailed information
-3. Follow the contribution guidelines
 
 ## Disclaimer
 
