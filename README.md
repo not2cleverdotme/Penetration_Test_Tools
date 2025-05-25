@@ -93,7 +93,7 @@ A comprehensive PowerShell-based system reconnaissance and security assessment t
 
 1. Clone the repository:
 \`\`\`powershell
-git clone https://github.com/not2clever/Penetration_Test_Tools.git
+git clone https://github.com/not2cleverdotme/Penetration_Test_Tools.git
 \`\`\`
 
 2. Ensure you have the required PowerShell modules:
