@@ -833,20 +833,33 @@ function Test-ADCSVulnerabilities {
 Clear-Host
 Write-OutputAndLog $Banner
 
-if (!(Test-AdminPrivileges)) {
-    Write-Log "Script requires administrative privileges to perform complete reconnaissance." -Level Warning
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (!$isAdmin) {
+    Write-Log "Running without administrative privileges. Some features will be limited." -Level Warning
+    Write-OutputAndLog @"
+
+Limited functionality mode:
+- Basic system information only
+- Network adapter information (limited)
+- Basic security checks
+- No Active Directory checks
+- No ADCS vulnerability checks
+- Limited registry checks
+
+For full functionality, run as Administrator.
+"@ -ForegroundColor Yellow
 }
 
-# Execute reconnaissance modules in new order
+# Execute reconnaissance modules
 Write-OutputAndLog "`n=== Starting Reconnaissance ==="
 
-# 1. System Information
+# 1. System Information (works without admin)
 $systemInfo = Get-SystemInfo
 
-# 2. Basic Network Information
+# 2. Basic Network Information (partial functionality without admin)
 Write-OutputAndLog "`n=== Network Configuration ==="
 try {
-    # Get all network adapters
+    # Get all network adapters (works without admin)
     $adapters = Get-NetAdapter | Where-Object Status -eq 'Up'
     foreach ($adapter in $adapters) {
         $ipConfig = Get-NetIPConfiguration -InterfaceIndex $adapter.ifIndex
@@ -864,48 +877,56 @@ try {
         }
     }
 
-    # Get ARP table
-    Get-NetNeighbor | Where-Object State -eq 'Reachable' | 
-        Write-TableOutput -Title "ARP Table"
+    # Only run these if we have admin rights
+    if ($isAdmin) {
+        # Get ARP table
+        Get-NetNeighbor | Where-Object State -eq 'Reachable' | 
+            Write-TableOutput -Title "ARP Table"
 
-    # Get routing table
-    Get-NetRoute -Protocol NetMgmt | 
-        Write-TableOutput -Title "Routing Table"
+        # Get routing table
+        Get-NetRoute -Protocol NetMgmt | 
+            Write-TableOutput -Title "Routing Table"
 
-    # Get Network Shares
-    Get-SmbShare | Write-TableOutput -Title "Network Shares"
+        # Get Network Shares
+        Get-SmbShare | Write-TableOutput -Title "Network Shares"
 
-    if ($Extended) {
-        # Get Network Connection Profiles
-        Get-NetConnectionProfile | Write-TableOutput -Title "Network Profiles"
+        if ($Extended) {
+            # Get Network Connection Profiles
+            Get-NetConnectionProfile | Write-TableOutput -Title "Network Profiles"
 
-        # Get Network Interface Statistics
-        Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object {
-            $stats = $_ | Get-NetAdapterStatistics
-            [PSCustomObject]@{
-                'Adapter' = $_.Name
-                'ReceivedBytes' = [math]::Round($stats.ReceivedBytes/1MB, 2).ToString() + " MB"
-                'SentBytes' = [math]::Round($stats.SentBytes/1MB, 2).ToString() + " MB"
-                'TotalErrors' = $stats.ReceivedErrors + $stats.OutboundErrors
-            }
-        } | Write-TableOutput -Title "Interface Statistics"
-
-        # Get DHCP Leases
-        Get-DhcpServerv4Lease -ErrorAction SilentlyContinue | 
-            Write-TableOutput -Title "DHCP Leases"
+            # Get Network Interface Statistics
+            Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object {
+                $stats = $_ | Get-NetAdapterStatistics
+                [PSCustomObject]@{
+                    'Adapter' = $_.Name
+                    'ReceivedBytes' = [math]::Round($stats.ReceivedBytes/1MB, 2).ToString() + " MB"
+                    'SentBytes' = [math]::Round($stats.SentBytes/1MB, 2).ToString() + " MB"
+                    'TotalErrors' = $stats.ReceivedErrors + $stats.OutboundErrors
+                }
+            } | Write-TableOutput -Title "Interface Statistics"
+        }
     }
 }
 catch {
     Write-Log "Error collecting network configuration: $($_.Exception.Message)" -Level Error
 }
 
-# 3. Active Directory Information (if not skipped)
-if (!$SkipAD) {
-    Get-EnhancedADInfo
-    Test-ADCSVulnerabilities
+# 3. Active Directory Information (requires admin and modules)
+if (!$SkipAD -and $isAdmin) {
+    if (Get-Module -ListAvailable -Name ActiveDirectory) {
+        Get-EnhancedADInfo
+    } else {
+        Write-Log "ActiveDirectory module not available. To enable AD checks, install RSAT tools." -Level Warning
+    }
+    
+    if (Get-Module -ListAvailable -Name PSPKI) {
+        Test-ADCSVulnerabilities
+    } else {
+        Write-Log "PSPKI module not available. To enable ADCS checks, install PSPKI module." -Level Warning
+    }
 }
 
-# 4. Vulnerability Assessment
+# 4. Basic Security Assessment (partial functionality without admin)
 Get-VulnerabilityCheck
 
 # Add summary at the end
