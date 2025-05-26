@@ -38,6 +38,62 @@ param (
     [string]$OutputDir = $PSScriptRoot
 )
 
+function Install-Prerequisites {
+    Write-Host "`n=== Checking and Installing Prerequisites ===" -ForegroundColor Cyan
+    
+    # Check if running on Windows
+    if (-not $IsWindows) {
+        Write-Error "This script is designed to run on Windows systems only."
+        exit 1
+    }
+
+    # Check if running as Administrator
+    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        Write-Error "This script needs to be run as Administrator to install prerequisites."
+        exit 1
+    }
+
+    # Install NuGet package provider if not present
+    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing NuGet package provider..."
+        Install-PackageProvider -Name NuGet -Force -Scope AllUsers | Out-Null
+    }
+
+    # Set PSGallery as trusted
+    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+
+    # Install RSAT Tools if not present
+    Write-Host "Checking RSAT Tools..."
+    $rsatFeatures = Get-WindowsCapability -Online | Where-Object Name -like 'Rsat*'
+    $rsatADFeature = $rsatFeatures | Where-Object Name -like '*ActiveDirectory*'
+    if ($rsatADFeature.State -ne "Installed") {
+        Write-Host "Installing RSAT Active Directory Tools..."
+        Add-WindowsCapability -Online -Name $rsatADFeature.Name
+    }
+
+    # Install PowerShell modules
+    $requiredModules = @(
+        @{Name = "PSPKI"; MinimumVersion = "3.7.2"},
+        @{Name = "ActiveDirectory"; MinimumVersion = "1.0.0"}
+    )
+
+    foreach ($module in $requiredModules) {
+        if (-not (Get-Module -ListAvailable -Name $module.Name)) {
+            Write-Host "Installing $($module.Name) module..."
+            Install-Module -Name $module.Name -Force -AllowClobber -Scope AllUsers
+        }
+        else {
+            Write-Host "$($module.Name) module is already installed."
+        }
+    }
+
+    Write-Host "All prerequisites have been installed successfully." -ForegroundColor Green
+}
+
+# Run prerequisites installation
+Install-Prerequisites
+
 # Create output directory if it doesn't exist (this will only be used if custom path is provided)
 if (-not (Test-Path -Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
